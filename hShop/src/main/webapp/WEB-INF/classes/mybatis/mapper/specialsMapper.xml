@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sp.app.mapper.SpecialsMapper">
+	<select id="dataCountSpecials" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0)
+		FROM specials
+		<where>
+			classify = #{classify} AND showSpecial = 1 AND 
+			(startDate &lt;= SYSDATE AND endDate &gt;= SYSDATE)
+		</where>
+	</select>
+
+	<!-- 특가/기획 리스트 -->	
+	<select id="listSpecials" parameterType="map" resultType="com.sp.app.domain.Specials">
+		SELECT specialNum, classify, subject, imageFilename, 
+		        TO_CHAR(startDate, 'YYYY-MM-DD HH24:MI') startDate, 
+		        TO_CHAR(endDate, 'YYYY-MM-DD HH24:MI') endDate
+		FROM specials
+		<where>
+			classify = #{classify} AND showSpecial = 1 AND 
+			(startDate &lt;= SYSDATE AND endDate &gt;= SYSDATE)
+		</where>
+		ORDER BY specialNum DESC
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+	
+	<select id="findById" parameterType="Long" resultType="com.sp.app.domain.Specials">
+		SELECT specialNum, classify, subject, content, imageFilename, 
+		        TO_CHAR(startDate, 'YYYY-MM-DD HH24:MI') startDate, 
+		        TO_CHAR(endDate, 'YYYY-MM-DD HH24:MI') endDate
+		FROM specials
+		WHERE specialNum = #{specialNum}
+	</select>
+	
+	<select id="dataCountProduct" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0)
+		FROM specials s
+		JOIN specialsDetail d ON s.specialNum = d.specialNum
+		JOIN product p ON d.productNum = p.productNum
+		JOIN productCategory c ON p.categoryNum = c.categoryNum
+		WHERE p.classify = #{classify} AND p.productShow = 1 AND showSpecial = 1
+		    AND (startDate &lt;= SYSDATE AND endDate &gt;= SYSDATE)
+		<if test="specialNum != null">
+			AND d.specialNum = #{specialNum}
+		</if>
+	</select>
+	
+	<!-- 특가/기획 상품 목록 -->
+	<select id="listProduct" parameterType="map" resultType="com.sp.app.domain.SpecialsProduct">
+		SELECT p.productNum, p.categoryNum, categoryName, productName, price, savedMoney, 
+			discountRate, delivery, thumbnail, NVL(saleCount, 0) saleCount
+		FROM specials s
+		JOIN specialsDetail d ON s.specialNum = d.specialNum
+		JOIN product p ON d.productNum = p.productNum
+		JOIN productCategory c ON p.categoryNum = c.categoryNum
+		LEFT OUTER JOIN (
+			SELECT productNum, COUNT(*) saleCount
+			FROM orderDetail
+			GROUP BY productNum
+		) pc ON p.productNum = pc.productNum
+		WHERE p.classify = #{classify} AND p.productShow = 1 AND showSpecial = 1 
+		    AND (startDate &lt;= SYSDATE AND endDate &gt;= SYSDATE)
+		<if test="specialNum != null">
+			AND d.specialNum = #{specialNum}
+		</if>
+		ORDER BY d.displayOrder DESC, d.detailNum DESC
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+
+</mapper>

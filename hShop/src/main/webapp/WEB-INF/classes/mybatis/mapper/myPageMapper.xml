@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sp.app.mapper.MyPageMapper">
+	<select id="countPayment" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0)
+		FROM productOrder po
+		JOIN orderDetail od ON po.orderNum = od.orderNum
+		WHERE po.memberIdx = #{memberIdx} AND userDelete = 0
+	</select>
+	
+	<!-- 유저의 전체 구매 리스트 -->
+	<select id="listPayment" parameterType="map" resultType="com.sp.app.domain.Payment">
+		SELECT po.orderNum, po.memberIdx, po.orderDate, po.totalMoney, po.usedSaved, po.payment,
+				po.deliveryCharge, po.orderStateDate, po.orderState, po.deliveryName, po.invoiceNumber,
+			od.orderDetailNum, od.productNum, od.detailNum, od.detailNum2, od.qty, od.salePrice,
+				od.productMoney, od.detailState, od.savedMoney,
+			p.productName, p.optionCount, p.thumbnail,
+			d1.optionValue, d2.optionValue optionValue2,
+			NVL(r.reviewWrite, 0) reviewWrite
+		FROM productOrder po
+		JOIN orderDetail od ON po.orderNum = od.orderNum
+		JOIN product p ON od.productNum = p.productNum
+		LEFT OUTER JOIN optionDetail d1 ON od.detailNum = d1.detailNum
+		LEFT OUTER JOIN optionDetail d2 ON od.detailNum2 = d2.detailNum
+		LEFT OUTER JOIN (
+			SELECT num, 1 reviewWrite
+			FROM productReview
+			WHERE memberIdx = #{memberIdx}
+		) r ON od.orderDetailNum = r.num
+		WHERE po.memberIdx = #{memberIdx} AND userDelete = 0
+		ORDER BY orderDate DESC
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+	
+	<!-- 구매 상세 정보 -->
+	<select id="findByOrderDetail" parameterType="map" resultType="com.sp.app.domain.Payment">
+		SELECT po.orderNum, po.orderDate, po.totalMoney, po.usedSaved, po.payment,
+				po.deliveryCharge, po.orderStateDate, po.orderState, po.deliveryName, po.invoiceNumber,
+			pd.payMethod, pd.cardName, pd.authDate, 
+			od.orderDetailNum, od.productNum, od.detailNum, od.detailNum2, od.qty, od.salePrice,
+				od.productMoney, od.detailState, od.savedMoney,
+			p.productName, p.optionCount,
+			d1.optionValue, d2.optionValue optionValue2
+		FROM productOrder po
+		JOIN payDetail pd ON po.orderNum = pd.orderNum
+		JOIN orderDetail od ON po.orderNum = od.orderNum
+		JOIN product p ON od.productNum = p.productNum
+		LEFT OUTER JOIN optionDetail d1 ON od.detailNum = d1.detailNum
+		LEFT OUTER JOIN optionDetail d2 ON od.detailNum2 = d2.detailNum
+		WHERE po.memberIdx = #{memberIdx} AND od.orderDetailNum = #{orderDetailNum}
+	</select>
+
+	<!-- 구매번호에 대한 구매 리스트 -->
+	<select id="listPurchase" parameterType="map" resultType="com.sp.app.domain.Payment">
+		SELECT po.orderNum, po.orderDate, po.totalMoney, po.usedSaved, po.payment,
+				po.deliveryCharge, po.orderStateDate, po.orderState, po.deliveryName, po.invoiceNumber,
+			od.orderDetailNum, od.productNum, od.detailNum, od.detailNum2, od.qty, od.salePrice,
+				od.productMoney, od.detailState, od.savedMoney,
+			p.productName, p.optionCount, p.thumbnail,
+			d1.optionValue, d2.optionValue optionValue2
+		FROM productOrder po
+		JOIN orderDetail od ON po.orderNum = od.orderNum
+		JOIN product p ON od.productNum = p.productNum
+		LEFT OUTER JOIN optionDetail d1 ON od.detailNum = d1.detailNum
+		LEFT OUTER JOIN optionDetail d2 ON od.detailNum2 = d2.detailNum
+		WHERE po.orderNum = #{orderNum}
+	</select>
+	
+	<!-- 배송지 정보 -->
+	<select id="findByOrderDelivery" parameterType="map" resultType="com.sp.app.domain.Destination">
+		SELECT orderNum, recipientName, tel, zip, addr1, addr2, destMemo
+		FROM orderDelivery
+		WHERE orderNum = #{orderNum}
+	</select>
+	
+	<!-- 주문상세상태 변경 -->
+	<update id="updateOrderDetailState" parameterType="map">
+		UPDATE orderDetail SET detailState = #{detailState}
+		WHERE orderDetailNum = #{orderDetailNum}
+	</update>
+	
+	<!-- 유저의 주문 내역을 삭제 상태로 변경 -->
+	<update id="updateOrderHistory" parameterType="Long">
+		UPDATE orderDetail SET userDelete = 1
+		WHERE orderDetailNum = #{orderDetailNum}
+	</update>
+	
+	<!-- 주문상세 상태 정보 등록 -->
+	<insert id="insertDetailStateInfo" parameterType="map">
+		INSERT INTO detailStateInfo(stateNum, orderDetailNum, memberIdx, detailState, stateMemo, detailStateDate) VALUES
+			(detailState_seq.NEXTVAL, #{orderDetailNum}, #{memberIdx}, #{detailState}, 
+				#{stateMemo,jdbcType=VARCHAR}, SYSDATE)
+	</insert>
+	
+	<!-- 장바구니 등록 -->
+	<insert id="insertCart" parameterType="com.sp.app.domain.Order">
+		INSERT INTO cart(cartNum, userId, productNum, stockNum, qty, reg_date) VALUES 
+			(cart_seq.NEXTVAL, #{userId}, #{productNum}, #{stockNum}, #{qty}, SYSDATE)
+	</insert>
+	
+	<!-- 장바구니 수정 -->
+	<update id="updateCart" parameterType="com.sp.app.domain.Order">
+		UPDATE cart SET qty = #{qty}, reg_date = SYSDATE
+		WHERE stockNum = #{stockNum} AND userId = #{userId}
+	</update>
+
+	<select id="findByCartId" parameterType="map" resultType="com.sp.app.domain.Order">
+		SELECT cartNum, userId, productNum, stockNum, qty, reg_date
+		FROM cart
+		WHERE stockNum = #{stockNum} AND userId = #{userId}
+	</select>
+	
+	<!-- 유저의 장바구니 리스트 -->	
+	<select id="listCart" resultType="com.sp.app.domain.Order" parameterType="String">
+    	SELECT ct.cartNum, ct.userId, ct.stockNum, ct.qty, ct.reg_date,
+    		ps.productNum, ps.detailNum, ps.detailNum2, ps.totalStock,
+    		p.productName, p.price, p.savedMoney, p.discountRate, p.delivery, p.thumbnail, p.optionCount,
+    		po1.optionNum, po1.optionName,
+    		po2.optionNum optionNum2, po2.optionName optionName2,
+    		d1.detailNum, d1.optionValue,
+    		d2.detailNum detailNum2, d2.optionValue optionValue2
+    	FROM cart ct
+    	JOIN productStock ps ON ct.stockNum = ps.stockNum 
+    	JOIN product p ON ps.productNum = p.productNum
+    	LEFT OUTER JOIN (
+            SELECT productNum, optionNum, optionName, parentOption 
+            FROM productOption 
+            WHERE parentOption IS NULL
+    	) po1 ON ps.productNum = po1.productNum
+		LEFT OUTER JOIN (
+            SELECT optionNum, optionName, parentOption
+            FROM productOption
+			WHERE parentOption IS NOT NULL
+        ) po2 ON po1.optionNum = po2.parentOption
+    	LEFT OUTER JOIN optionDetail d1 ON ps.detailNum = d1.detailNum
+    	LEFT OUTER JOIN optionDetail d2 ON ps.detailNum2 = d2.detailNum
+		WHERE ct.userId = #{userId}
+		ORDER BY cartNum DESC
+	</select>
+	
+	<delete id="deleteCart" parameterType="map">
+		DELETE FROM cart
+		WHERE userId = #{userId} 
+		<if test="gubun == 'item' ">
+			AND stockNum = #{stockNum}
+		</if>
+		<if test="gubun == 'list' ">
+			AND stockNum IN
+			<foreach collection="list" item="stockNum" index="index"
+				open="(" separator="," close=")">
+				#{stockNum}
+			</foreach>
+		</if>
+	</delete>
+
+	<!-- 장바구니 등록 후 15일이 지난 내역 삭제 -->
+	<delete id="deleteCartExpiration">
+		DELETE FROM cart
+		WHERE reg_date + 15 &lt; SYSDATE
+	</delete>
+</mapper>
+	

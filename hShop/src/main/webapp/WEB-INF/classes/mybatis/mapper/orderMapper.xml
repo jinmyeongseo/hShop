@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sp.app.mapper.OrderMapper">
+	<select id="findByMaxOrderNumber" resultType="String">
+		SELECT orderNum
+		FROM productOrder
+		ORDER BY orderDate DESC
+		FETCH FIRST 1 ROWS ONLY
+	</select>
+	
+	<!-- 주문 등록 -->
+	<insert id="insertOrder" parameterType="com.sp.app.domain.Order">
+		INSERT INTO productOrder(orderNum, memberIdx, orderDate, totalMoney, usedSaved, deliveryCharge, 
+			payment, cancelAmount, orderState) VALUES (#{orderNum}, #{memberIdx}, SYSDATE, 
+			#{totalMoney}, #{usedSaved}, #{deliveryCharge}, #{payment}, 0, 1)
+	</insert>
+
+	<!-- 결제 내역 등록 -->
+	<insert id="insertPayDetail" parameterType="com.sp.app.domain.Order">
+		INSERT INTO payDetail(orderNum, payMethod, cardName, authNumber, authDate) 
+			VALUES (#{orderNum}, #{payMethod}, #{cardName}, #{authNumber}, TO_DATE(#{authDate}, 'YYYY-MM-DD HH24:MI:SS') )
+	</insert>
+
+	<!-- 주문 상세 정보 등록 -->
+	<insert id="insertOrderDetail" parameterType="com.sp.app.domain.Order">
+		INSERT INTO orderDetail(orderDetailNum, orderNum, qty, price, salePrice, 
+			productNum, detailNum, detailNum2, productMoney, savedMoney, userDelete, detailState) VALUES (
+			orderDetail_seq.NEXTVAL, #{orderNum}, #{qty}, #{price}, #{salePrice}, 
+			#{productNum}, #{detailNum, jdbcType=BIGINT}, #{detailNum2, jdbcType=BIGINT}, #{productMoney}, #{savedMoney}, 0, 0)
+	</insert>
+	
+	<!-- 배송지 등록 -->
+	<insert id="insertOrderDelivery" parameterType="com.sp.app.domain.Order">
+		INSERT INTO orderDelivery(orderNum, recipientName, tel, zip, addr1, addr2, destMemo) 
+			VALUES (#{orderNum}, #{recipientName}, #{tel}, #{zip}, #{addr1}, #{addr2}, 
+					#{destMemo, jdbcType=VARCHAR})
+	</insert>
+
+	<!-- 포인트 등록 -->
+	<insert id="insertUserPoint" parameterType="com.sp.app.domain.UserPoint">
+		INSERT INTO userPoint(pointNum, userId, reg_date, orderNum, base_date, classify, point, memo, balance)
+			VALUES(userPoint_seq.NEXTVAL, #{userId}, SYSDATE,
+				#{orderNum, jdbcType=VARCHAR},
+				TO_DATE(#{base_date},'YYYY-MM-DD HH24:MI:SS'),
+				#{classify}, #{point}, #{memo, jdbcType=VARCHAR}, 
+				NVL((SELECT balance FROM userPoint 
+						WHERE userId = #{userId}
+						ORDER BY pointNum DESC 
+						FETCH FIRST 1 ROWS ONLY ), 0) + #{point}
+			)
+	</insert>
+	
+	<!-- 유저의 가장 최근 포인트 -->
+	<select id="findByUserPoint" parameterType="String" resultType="com.sp.app.domain.UserPoint">
+		SELECT pointNum, userId, reg_date, orderNum, base_date, classify, point, balance, memo
+		FROM userPoint
+		WHERE userId = #{userId}
+		ORDER BY pointNum DESC
+		FETCH FIRST 1 ROWS ONLY
+	</select>
+
+	<!-- 주문 내역 상세 리스트 -->
+	<select id="listOrderProduct" parameterType="java.util.List" resultType="com.sp.app.domain.Order">
+    	SELECT ps.stockNum, ps.productNum, ps.detailNum, ps.detailNum2, ps.totalStock,
+    		p.productName, p.price, p.savedMoney, p.discountRate, p.delivery, p.thumbnail, p.optionCount,
+    		po1.optionNum, po1.optionName,
+    		po2.optionNum optionNum2, po2.optionName optionName2,
+    		d1.detailNum, d1.optionValue,
+    		d2.detailNum detailNum2, d2.optionValue optionValue2
+    	FROM (
+    		SELECT stockNum, productNum, detailNum, detailNum2, totalStock
+    		FROM productStock
+			WHERE (stockNum, productNum) IN
+				<foreach collection="list" item="item" index="index"
+					open="(" separator="," close=")">
+					(#{item.stockNum}, #{item.productNum})
+				</foreach>    		
+    	) ps 
+    	JOIN product p ON ps.productNum = p.productNum
+    	LEFT OUTER JOIN (
+            SELECT productNum, optionNum, optionName, parentOption 
+            FROM productOption 
+            WHERE parentOption IS NULL
+    	) po1 ON ps.productNum = po1.productNum
+		LEFT OUTER JOIN (
+            SELECT optionNum, optionName, parentOption
+            FROM productOption
+			WHERE parentOption IS NOT NULL
+        ) po2 ON po1.optionNum = po2.parentOption
+    	LEFT OUTER JOIN optionDetail d1 ON ps.detailNum = d1.detailNum
+    	LEFT OUTER JOIN optionDetail d2 ON ps.detailNum2 = d2.detailNum
+	</select>
+	
+	<!-- 주문 상세 정보 -->
+	<select id="findByOrderDetail" parameterType="Long" resultType="com.sp.app.domain.Order">
+		SELECT od.orderDetailNum, od.orderNum, od.qty, od.price, od.salePrice, 
+			od.productNum, od.detailNum, od.detailNum2,
+			od.productMoney, od.savedMoney, od.userDelete, od.detailState,
+			TO_CHAR(po.orderDate, 'YYYY-MM-DD HH24:MI:SS') orderDate
+		FROM orderDetail od
+		JOIN productOrder po ON od.orderNum = po.orderNum
+		WHERE od.orderDetailNum = #{orderDetailNum}
+	</select>
+
+	<!-- 상품 정보 -->
+	<select id="findByProduct" parameterType="Long" resultType="com.sp.app.domain.Order">
+		SELECT productNum, productName, price, savedMoney, discountRate, delivery, thumbnail
+		FROM product p
+		WHERE p.productNum = #{productNum}
+	</select>
+	
+	<!-- 옵션 상세 리스트 -->
+	<select id="listOptionDetail" parameterType="java.util.List" resultType="com.sp.app.domain.Order">
+		SELECT detailNum, od.optionNum, optionName, optionValue
+		FROM optionDetail od
+		JOIN productOption po ON od.optionNum = po.optionNum
+		WHERE od.detailNum IN
+		<foreach collection="list" item="detailNum" index="index"
+			open="(" separator="," close=")">
+			#{detailNum}
+		</foreach>		
+	</select>
+	
+	<!-- 옵션 상세 정보 -->
+	<select id="findByOptionDetail" parameterType="Long" resultType="com.sp.app.domain.Order">
+		SELECT detailNum, od.optionNum, optionName, optionValue
+		FROM optionDetail od
+		JOIN productOption po ON od.optionNum = po.optionNum
+		WHERE od.detailNum = #{detailNum}
+	</select>
+	
+	<!-- 판매 개수만큼 재고 감소 -->
+	<update id="updateProductStockDec" parameterType="com.sp.app.domain.Order">
+		UPDATE productStock SET totalStock = totalStock - #{qty}
+		WHERE stockNum = #{stockNum}
+	</update>
+</mapper>
+	

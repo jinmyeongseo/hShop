@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sp.app.mapper.ProductMapper">
+	<!-- 일반 상품 목록 -->
+	<select id="dataCount" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0) FROM product
+		WHERE classify = 100 AND productShow = 1 AND categoryNum = #{categoryNum}
+	</select>
+	
+	<select id="listProduct" parameterType="map" resultType="com.sp.app.domain.Product">
+		SELECT productNum, p.categoryNum, categoryName, productName, price, savedMoney, discountRate, 
+			optionCount, delivery, thumbnail
+		FROM product p
+		JOIN productCategory c ON p.categoryNum = c.categoryNum
+		WHERE classify = 100 AND productShow = 1 AND p.categoryNum = #{categoryNum}
+		ORDER BY productNum DESC
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+	
+	<select id="findById" parameterType="Long" resultType="com.sp.app.domain.Product">
+		SELECT p.productNum, p.categoryNum, p.classify, p.productShow, categoryName, 
+		    productName, price, savedMoney, optionCount,
+			discountRate, delivery, thumbnail, p.content, p.reg_date, totalStock,
+			NVL(score, 0) score, NVL(reviewCount, 0) reviewCount,
+			NVL(questionCount, 0) questionCount,
+			TO_CHAR(startDate, 'YYYY-MM-DD HH24:MI') startDate,
+			TO_CHAR(endDate, 'YYYY-MM-DD HH24:MI') endDate,
+			NVL(showSpecial, -1) showSpecial, 
+			NVL(saleCount, 0) saleCount
+		FROM product p
+		JOIN productCategory c ON p.categoryNum = c.categoryNum
+		LEFT OUTER JOIN (
+			SELECT productNum, NVL(SUM(totalStock), 0) totalStock
+			FROM productStock
+			GROUP BY productNum
+		) ps ON p.productNum = ps.productNum		
+		LEFT OUTER JOIN specialsDetail d ON p.productNum = d.productNum
+		LEFT OUTER JOIN specials s ON d.specialNum = s.specialNum
+		LEFT OUTER JOIN (
+			SELECT productNum, ROUND(AVG(score), 1) score, COUNT(*) reviewCount
+			FROM productReview
+			WHERE showReview = 1 AND locked = 0
+			GROUP BY productNum
+		) t ON p.productNum = t.productNum
+		LEFT OUTER JOIN (
+			SELECT productNum, COUNT(*) questionCount
+			FROM productQna
+			WHERE showQuestion = 1 AND locked = 0
+			GROUP BY productNum
+		) q ON p.productNum = q.productNum
+		LEFT OUTER JOIN (
+			SELECT productNum, COUNT(*) saleCount
+			FROM orderDetail
+			GROUP BY productNum
+		) pc ON p.productNum = pc.productNum
+		WHERE p.productShow = 1 AND p.productNum = #{productNum}
+	</select>
+	
+	<select id="listProductFile" parameterType="Long" resultType="com.sp.app.domain.Product">
+		SELECT fileNum, productNum, filename
+		FROM productFile
+		WHERE productNum = #{productNum}
+	</select>
+	
+	<!-- 모든 상품 카테고리 목록 -->
+	<select id="listAllCategory" resultType="com.sp.app.domain.Product">
+		SELECT categoryNum, categoryName, use, displayNo, parentNum, LEVEL FROM (
+    		SELECT categoryNum, categoryName, use, displayNo, parentNum
+    		FROM productCategory 
+    		WHERE use = 1
+		)
+		START WITH parentNum IS NULL
+		CONNECT BY PRIOR categoryNum = parentNum 
+		ORDER SIBLINGS BY displayNo	
+	</select>
+	
+	<!-- 상품 상위 카테고리 목록 -->
+	<select id="listCategory" resultType="com.sp.app.domain.Product">
+		SELECT categoryNum, categoryName, use, displayNo, parentNum
+		FROM productCategory
+		WHERE use = 1 AND parentNum IS NULL
+		ORDER BY displayNo
+	</select>
+
+	<!-- 상품 하위 카테고리 목록 -->
+	<select id="listSubCategory" parameterType="Long" resultType="com.sp.app.domain.Product">
+		SELECT categoryNum, categoryName, use, displayNo, parentNum
+		FROM productCategory
+		WHERE use = 1 AND parentNum = #{parentNum}
+		ORDER BY displayNo
+	</select>
+	
+	<!-- 상품 옵션 리스트-->
+	<select id="listProductOption" parameterType="Long" resultType="com.sp.app.domain.Product">
+		SELECT optionNum, optionName, parentOption, productNum
+		FROM productOption
+		WHERE productNum = #{productNum}
+		ORDER BY parentOption NULLS FIRST, parentOption
+	</select>
+	
+	<!-- 상품 옵션별 상세 옵션 리스트-->
+	<select id="listOptionDetail" parameterType="Long" resultType="com.sp.app.domain.Product">
+		SELECT detailNum, optionNum, optionValue
+		FROM optionDetail
+		WHERE optionNum = #{optionNum}
+		ORDER BY detailNum
+	</select>
+
+	<!-- 상품에 대한 재고 수량 -->
+	<select id="listOptionDetailStock" parameterType="map" resultType="com.sp.app.domain.Product">
+    	SELECT ps.stockNum, ps.productNum, ps.detailNum, ps.detailNum2, ps.totalStock,
+    		po1.optionNum, po1.optionName,
+    		po2.optionNum optionNum2, po2.optionName optionName2,
+    		d1.detailNum, d1.optionValue,
+    		d2.detailNum detailNum2, d2.optionValue optionValue2
+    	FROM (
+    		SELECT stockNum, productNum, detailNum, detailNum2, totalStock
+    		FROM productStock
+    		WHERE productNum = #{productNum} 
+    		<if test="detailNum != null and detailNum != 0">
+				AND detailNum = #{detailNum}
+    		</if>
+    	) ps
+    	LEFT OUTER JOIN (
+            SELECT productNum, optionNum, optionName, parentOption 
+            FROM productOption 
+            WHERE productNum = #{productNum} AND parentOption IS NULL
+    	) po1 ON ps.productNum = po1.productNum
+		LEFT OUTER JOIN (
+            SELECT optionNum, optionName, parentOption
+            FROM productOption
+			WHERE productNum = #{productNum} AND parentOption IS NOT NULL
+        ) po2 ON po1.optionNum = po2.parentOption
+    	LEFT OUTER JOIN optionDetail d1 ON ps.detailNum = d1.detailNum
+    	LEFT OUTER JOIN optionDetail d2 ON ps.detailNum2 = d2.detailNum
+    	WHERE NVL(ps.totalStock, 0) &gt; 0
+    	ORDER BY ps.detailNum, ps.detailNum2
+	</select>
+	
+</mapper>
+	

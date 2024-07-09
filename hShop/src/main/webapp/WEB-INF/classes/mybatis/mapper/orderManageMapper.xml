@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sp.app.admin.mapper.OrderManageMapper">
+	<sql id="where-list">
+		<choose>
+			<when test="schType == 'orderNum' ">
+			   ( po.orderNum  = #{kwd} )
+			</when>
+			<when test="schType == 'invoiceNumber' ">
+			   ( invoiceNumber  = #{kwd} )
+			</when>
+			<when test="schType == 'orderDate' ">
+			   ( TO_CHAR(orderDate, 'YYYYMMDD') = #{kwd}
+		          OR TO_CHAR(orderDate, 'YYYY-MM-DD') = #{kwd} )
+			</when>
+			<when test="schType == 'userName'">
+			    INSTR(userName, #{kwd}) &gt; 0
+			</when>
+		</choose>
+	</sql>
+	
+	<select id="orderCount" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0)
+		FROM productOrder po
+		LEFT OUTER JOIN member1 m ON po.memberIdx = m.memberIdx
+		<where>
+			<if test="state == 1">
+				( po.orderState = 0 OR po.orderState = 1 ) 
+			</if>
+			<if test="state == 3">
+				( po.orderState &gt;= 2 AND po.orderState &lt;= 5 ) 
+			</if>
+			<if test="kwd!=null and kwd!='' ">
+				AND <include refid="where-list"/>
+			</if>
+		</where>  
+	</select>
+
+	<!-- 주문 리스트 -->
+	<select id="listOrder" parameterType="map" resultType="com.sp.app.admin.domain.OrderManage">
+		SELECT po.orderNum, po.memberIdx, NVL(userName,'손님') userName, totalMoney,  
+			usedSaved, deliveryCharge, payment, cancelAmount,
+            TO_CHAR(orderDate, 'YYYY-MM-DD HH24:MI') orderDate,
+            orderState, deliveryName, invoiceNumber,
+            NVL(totalOrderCount, 0) totalOrderCount, NVL(totalQty, 0) totalQty,
+            NVL(detailCancelCount, 0) detailCancelCount
+		FROM productOrder po
+		LEFT OUTER JOIN member1 m ON po.memberIdx = m.memberIdx 
+        LEFT OUTER JOIN (
+            SELECT orderNum, COUNT(*) totalOrderCount, SUM(qty) totalQty,
+            	COUNT(DECODE(detailState,3,1,4,1,5,1,10,1,11,1,12,1)) detailCancelCount
+            FROM orderDetail
+            GROUP BY orderNum
+        ) od ON po.orderNum = od.orderNum
+		<where>
+			<if test="state == 1">
+				( po.orderState = 0 OR po.orderState = 1 ) 
+			</if>
+			<if test="state == 3">
+				( po.orderState &gt;= 2 AND po.orderState &lt;= 5 ) 
+			</if>
+			<if test="kwd!=null and kwd!='' ">
+				AND <include refid="where-list"/>
+			</if>
+		</where>  
+        ORDER BY po.orderNum DESC
+        OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+
+	<select id="findById" parameterType="String" resultType="com.sp.app.admin.domain.OrderManage">
+		SELECT po.orderNum, po.memberIdx, 
+			po.usedSaved, po.deliveryCharge, po.payment, po.cancelAmount, po.orderState,
+			TO_CHAR(po.orderStateDate, 'YYYY-MM-DD HH24:MI:SS') orderStateDate, 
+			po.deliveryName, po.invoiceNumber, TO_CHAR(po.orderDate, 'YYYY-MM-DD HH24:MI:SS') orderDate,
+			NVL(m.userName,'손님') userName, m.userId, orderDate, totalMoney,
+			pd.payMethod, pd.cardName, pd.authNumber, pd.authDate
+		FROM productOrder po
+		LEFT OUTER JOIN member1 m ON po.memberIdx = m.memberIdx
+		LEFT OUTER JOIN payDetail pd ON po.orderNum = pd.orderNum 
+		WHERE po.orderNum = #{orderNum}
+	</select>
+	
+	<select id="findByOrderDetails" parameterType="String" resultType="com.sp.app.admin.domain.OrderDetailManage">
+		SELECT od.orderNum, od.orderDetailNum, od.qty, od.price, od.salePrice, od.productMoney, od.savedMoney,
+				od.productNum, od.detailNum, od.detailNum2, od.detailState,
+			p.productName, p.optionCount,
+			d1.optionValue, d2.optionValue optionValue2
+		FROM orderDetail od
+		JOIN product p ON od.productNum = p.productNum
+		LEFT OUTER JOIN optionDetail d1 ON od.detailNum = d1.detailNum
+		LEFT OUTER JOIN optionDetail d2 ON od.detailNum2 = d2.detailNum
+		WHERE od.orderNum = #{orderNum}
+	</select>
+
+	<select id="orderDetailCount" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0)
+		FROM productOrder po
+		LEFT OUTER JOIN member1 m ON po.memberIdx = m.memberIdx 		
+		JOIN orderDetail od ON po.orderNum = od.orderNum
+	</select>
+
+	<!-- 주문 상세 리스트 -->
+	<select id="listOrderDetail" parameterType="map" resultType="com.sp.app.admin.domain.OrderDetailManage">
+		SELECT po.orderNum, po.memberIdx, po.orderDate, po.totalMoney, po.usedSaved, po.payment,
+				po.deliveryCharge, po.orderState, po.deliveryName, po.invoiceNumber,
+			od.orderDetailNum, od.productNum, od.detailNum, od.detailNum2, od.qty, od.salePrice,
+				od.productMoney, od.savedMoney, od.detailState, 
+			NVL(m.userName,'손님') userName, m.userId,
+			p.savedMoney, p.productName, p.optionCount,
+			d1.optionValue, d2.optionValue optionValue2
+		FROM productOrder po
+		JOIN orderDetail od ON po.orderNum = od.orderNum
+		JOIN product p ON od.productNum = p.productNum
+		LEFT OUTER JOIN optionDetail d1 ON od.detailNum = d1.detailNum
+		LEFT OUTER JOIN optionDetail d2 ON od.detailNum2 = d2.detailNum
+		LEFT OUTER JOIN member1 m ON po.memberIdx = m.memberIdx 
+		ORDER BY po.orderNum DESC, od.orderDetailNum
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+	
+	<update id="updateOrderState" parameterType="map">
+		UPDATE productOrder SET orderState = #{orderState}, orderStateDate = SYSDATE
+		WHERE orderNum = #{orderNum}
+	</update>
+
+	<!-- 주문에 대한 상세 주문의 취소금액 합(취소/반품) -->
+	<select id="findByTotalCancelAmount" parameterType="String" resultType="Integer">
+		SELECT NVL(SUM(productMoney), 0) totalCancelAmount
+		FROM orderDetail 
+		WHERE orderNum = #{orderNum} AND (detailState = 3 OR detailState = 5 OR detailState = 12)
+	</select>
+
+	<!-- 주문에 대한 상세 주문의 주문 취소 이외의 개수 -->
+	<select id="totalOrderCount" parameterType="String" resultType="Integer">
+		SELECT NVL(COUNT(*), 0) orderCount
+		FROM orderDetail 
+		WHERE orderNum = #{orderNum} AND (detailState != 3 AND detailState != 5 AND detailState != 12)
+	</select>
+	
+	<update id="updateCancelAmount" parameterType="map">
+		UPDATE productOrder SET cancelAmount = #{cancelAmount}
+		WHERE orderNum = #{orderNum}
+	</update>
+	
+	<update id="updateOrderInvoiceNumber" parameterType="map">
+		UPDATE productOrder SET orderState = #{orderState}, orderStateDate = SYSDATE, 
+				deliveryName = #{deliveryName}, invoiceNumber = #{invoiceNumber}
+		WHERE orderNum = #{orderNum}
+	</update>
+
+	<update id="updateOrderDetailState" parameterType="map">
+		UPDATE orderDetail SET detailState = #{detailState}
+		WHERE orderDetailNum = #{orderDetailNum}
+	</update>
+	
+	<select id="listDeliveryCompany" resultType="map">
+		SELECT num, deliveryName, tel
+		FROM deliveryCompany
+	</select>
+	
+	<insert id="insertDetailStateInfo" parameterType="map">
+		INSERT INTO detailStateInfo(stateNum, orderDetailNum, memberIdx, detailState, stateMemo, detailStateDate) VALUES
+			(detailState_seq.NEXTVAL, #{orderDetailNum}, #{memberIdx}, #{detailState}, 
+				#{stateMemo,jdbcType=VARCHAR}, SYSDATE)
+	</insert>
+	
+	<select id="listDetailStateInfo" parameterType="long" resultType="map">
+		SELECT stateNum, orderDetailNum, d.memberIdx, NVL(userName, '손님') userName, detailState,
+			 stateMemo, TO_CHAR(detailStateDate, 'YYYYMMDD HH24:MI') detailStateDate
+		FROM detailStateInfo d
+		LEFT OUTER JOIN member1 m ON d.memberIdx = m.memberIdx
+		WHERE orderDetailNum = #{orderDetailNum}
+		ORDER BY stateNum DESC
+	</select>
+	
+	<!-- 개별판매취소(관리자),주문취소완료(관리자),반품완료(관리자) 인 경우 취소 개수 만큼 재고 변경 -->
+	<update id="updateProductStockInc" parameterType="map">
+		UPDATE productStock SET totalStock = totalStock + #{qty}
+        <choose>
+        	<when test="optionCount == 0">
+				WHERE productNum = #{productNum}
+        	</when>
+        	<when test="optionCount == 1">
+				WHERE productNum = #{productNum} AND detailNum = #{detailNum}
+        	</when>
+        	<otherwise>
+				WHERE productNum = #{productNum} AND detailNum = #{detailNum} AND detailNum2 = #{detailNum2}
+        	</otherwise>
+        </choose>
+	</update>
+	
+	<!-- 배송완료 5일 후 자동 구매확정 -->
+	<select id="listExpiredPeriodOrder" resultType="Long">
+		SELECT orderDetailNum
+		FROM productOrder po
+		JOIN orderDetail od ON po.orderNum = od.orderNum
+		WHERE po.orderState = 5 AND od.detailState = 0
+	  			AND TRUNC(SYSDATE - orderStateDate) &gt;= 5
+	</select>
+
+	<update id="updateAutoPurchaseconfirmation" parameterType="Long">
+		UPDATE orderDetail SET detailState = 2
+		WHERE orderDetailNum = #{orderDetailNum}
+	</update>
+	
+	<update id="updateAutoPurchaseconfirmation2">
+		UPDATE orderDetail SET detailState = 2
+		WHERE orderDetailNum IN (
+			SELECT orderDetailNum
+			FROM productOrder po
+			JOIN orderDetail od ON po.orderNum = od.orderNum
+			WHERE po.orderState = 5 AND od.detailState = 0
+    			AND TRUNC(SYSDATE - orderStateDate) &gt;= 5
+		)
+	</update>
+	
+</mapper>
+	

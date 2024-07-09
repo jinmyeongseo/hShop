@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sp.app.admin.mapper.ProductManageMapper">
+	<!-- 상품 등록 -->
+	<select id="productSeq" resultType="Long">
+		SELECT product_seq.NEXTVAL FROM dual
+	</select>
+	
+	<insert id="insertProduct" parameterType="com.sp.app.admin.domain.ProductManage">
+		INSERT INTO product(productNum, categoryNum, productName, classify, price, discountRate, 
+				savedMoney, delivery, optionCount, content, thumbnail, productShow, reg_date, 
+				update_date) VALUES (#{productNum}, #{categoryNum}, #{productName}, 
+				#{classify}, #{price}, #{discountRate}, #{savedMoney}, #{delivery}, 
+				#{optionCount}, #{content}, #{thumbnail}, #{productShow}, SYSDATE, SYSDATE)
+	</insert>
+	
+	<!-- 추가 이미지 등록 -->
+	<insert id="insertProductFile" parameterType="com.sp.app.admin.domain.ProductManage">
+		INSERT INTO productFile(fileNum, productNum, filename)
+			VALUES(productFile_seq.NEXTVAL, #{productNum}, #{filename})
+	</insert>
+	
+	<!-- 옵션1, 옵션2 등록 -->
+	<select id="optionSeq" resultType="Long">
+		SELECT productOption_seq.NEXTVAL FROM dual
+	</select>
+	
+	<insert id="insertProductOption" parameterType="com.sp.app.admin.domain.ProductManage">
+		INSERT INTO productOption(optionNum, optionName, productNum, parentOption)
+			VALUES(#{optionNum}, #{optionName}, #{productNum}, #{parentOption, jdbcType=INTEGER})
+	</insert>
+
+	<!-- 옵션 상세 정보 등록 -->
+	<select id="detailSeq" resultType="Long">
+		SELECT optionDetail_seq.NEXTVAL FROM dual
+	</select>
+
+	<insert id="insertOptionDetail" parameterType="com.sp.app.admin.domain.ProductManage">
+		INSERT INTO optionDetail(detailNum, optionNum, optionValue)
+			VALUES(#{detailNum}, #{optionNum}, #{optionValue})
+	</insert>
+	
+	<!-- 상품 카테고리 -->
+	<select id="findByCategory" parameterType="Long" resultType="com.sp.app.admin.domain.ProductManage">
+		SELECT categoryNum, categoryName, use, displayNo, parentNum
+		FROM productCategory
+		WHERE categoryNum = #{categoryNum}
+	</select>
+
+	<!-- 상품 상위 카테고리 목록 -->
+	<select id="listCategory" resultType="com.sp.app.admin.domain.ProductManage">
+		SELECT categoryNum, categoryName, use, displayNo, parentNum
+		FROM productCategory
+		WHERE use = 1 AND parentNum IS NULL
+		ORDER BY displayNo
+	</select>
+
+	<!-- 상품 하위 카테고리 목록 -->
+	<select id="listSubCategory" parameterType="Long" resultType="com.sp.app.admin.domain.ProductManage">
+		SELECT categoryNum, categoryName, use, displayNo, parentNum
+		FROM productCategory
+		WHERE use = 1 AND parentNum = #{parentNum}
+		ORDER BY displayNo
+	</select>
+	
+	<!-- 상품 목록 -->
+	<sql id="where-list">
+		<if test="schType=='all' ">
+			( INSTR(productName, #{kwd}) &gt; 0
+				OR DBMS_LOB.INSTR(content, #{kwd}) &gt; 0 )
+		</if>
+		<if test="schType=='productNum' ">
+			INSTR(p.productNum, #{kwd}) = 1
+		</if>
+		<if test="schType=='productName' ">
+			INSTR(productName, #{kwd}) &gt; 0
+		</if>
+		<if test="schType=='content' ">
+			DBMS_LOB.INSTR(content, #{kwd}) &gt; 0
+		</if>
+	</sql>
+		
+	<select id="dataCount" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0)
+		FROM product p
+		<where>
+			classify = #{classify}
+			<if test="categoryNum != 0">
+				AND p.categoryNum = #{categoryNum}
+			</if>
+			<if test="productShow != -1">
+				AND productShow = #{productShow}
+			</if>
+			<if test="kwd != null and kwd != '' ">
+				AND <include refid="where-list"/>
+			</if>
+		</where>
+	</select>
+	
+	<select id="listProduct" parameterType="map" resultType="com.sp.app.admin.domain.ProductManage">
+		SELECT p.productNum, categoryNum, productName, price, discountRate, optionCount,
+			thumbnail, productShow, reg_date, TO_CHAR(update_date, 'YYYY-MM-DD') update_date, 
+			NVL(totalStock, 0) totalStock
+		FROM product p
+		LEFT OUTER JOIN (
+			SELECT productNum, NVL(SUM(totalStock), 0) totalStock
+			FROM productStock
+			GROUP BY productNum
+		) t ON p.productNum = t.productNum
+		<where>
+			classify = #{classify}
+			<if test="categoryNum != 0">
+				AND p.categoryNum = #{categoryNum}
+			</if>
+			<if test="productShow != -1">
+				AND productShow = #{productShow}
+			</if>
+			<if test="kwd != null and kwd != '' ">
+				AND <include refid="where-list"/>
+			</if>
+		</where>
+		ORDER BY p.productNum DESC
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+	
+	<!-- 상품 상세 정보 -->
+	<select id="findById" parameterType="Long" resultType="com.sp.app.admin.domain.ProductManage">
+		SELECT p.productNum, p.categoryNum, c.categoryName, p.productName, p.classify, p.price, p.discountRate, 
+			p.savedMoney, p.delivery, p.content, p.optionCount, 
+			p.thumbnail, p.productShow, p.reg_date, p.update_date,
+			NVL(t.totalStock, 0) totalStock
+		FROM product p
+		JOIN productCategory c ON p.categoryNum = c.categoryNum
+		LEFT OUTER JOIN (
+			SELECT productNum, NVL(SUM(totalStock), 0) totalStock
+			FROM productStock
+			GROUP BY productNum
+		) t ON p.productNum = t.productNum		
+		WHERE p.productNum = #{productNum}
+	</select>
+	
+	<select id="listProductFile" parameterType="Long" resultType="com.sp.app.admin.domain.ProductManage">
+		SELECT fileNum, productNum, filename
+		FROM productFile
+		WHERE productNum = #{productNum}
+	</select>
+
+	<!-- 옵션1, 옵션2 -->
+	<select id="listProductOption" parameterType="Long" resultType="com.sp.app.admin.domain.ProductManage">
+		SELECT optionNum, optionName, parentOption, productNum
+		FROM productOption
+		WHERE productNum = #{productNum}
+		ORDER BY parentOption NULLS FIRST, parentOption
+	</select>
+
+	<!-- 옵션 상세 정보 -->	
+	<select id="listOptionDetail" parameterType="Long" resultType="com.sp.app.admin.domain.ProductManage">
+		SELECT detailNum, optionNum, optionValue
+		FROM optionDetail
+		WHERE optionNum = #{optionNum}
+		ORDER BY detailNum
+	</select>
+
+	<update id="updateProduct" parameterType="com.sp.app.admin.domain.ProductManage">
+		UPDATE product SET categoryNum = #{categoryNum}, productName = #{productName},
+			price = #{price}, discountRate = #{discountRate}, savedMoney = #{savedMoney},
+			optionCount = #{optionCount}, delivery = #{delivery}, content = #{content}, 
+			thumbnail = #{thumbnail}, productShow = #{productShow}, update_date = SYSDATE
+		WHERE productNum = #{productNum}
+	</update>
+
+	<delete id="deleteProduct" parameterType="Long">
+		DELETE FROM product WHERE productNum = #{productNum}
+	</delete>
+	
+	<delete id="deleteProductFile" parameterType="Long">
+		DELETE FROM productFile WHERE fileNum = #{fileNum}
+	</delete>
+	
+	<update id="updateProductOption" parameterType="com.sp.app.admin.domain.ProductManage">
+		UPDATE productOption SET optionName = #{optionName}
+		WHERE optionNum = #{optionNum}
+	</update>
+	
+	<delete id="deleteProductOption" parameterType="Long">
+		DELETE FROM productOption WHERE optionNum = #{optionNum}
+	</delete>
+
+	<update id="updateOptionDetail" parameterType="com.sp.app.admin.domain.ProductManage">
+		UPDATE optionDetail SET optionValue = #{optionValue}
+		WHERE detailNum = #{detailNum}
+	</update>
+	
+	<delete id="deleteOptionDetail" parameterType="Long">
+		DELETE FROM optionDetail WHERE detailNum = #{detailNum}
+	</delete>
+
+	<delete id="deleteOptionDetail2" parameterType="Long">
+		DELETE FROM optionDetail WHERE optionNum = #{optionNum}
+	</delete>
+
+	<!-- 상품 재고 -->
+	<insert id="insertProductStock" parameterType="com.sp.app.admin.domain.ProductStockManage">
+		INSERT INTO productStock(stockNum, productNum, detailNum, detailNum2, totalStock)
+			VALUES (productStock_seq.NEXTVAL, #{productNum}, 
+				#{detailNum, jdbcType=BIGINT}, #{detailNum2, jdbcType=BIGINT},
+				#{totalStock})
+	</insert>
+	
+	<update id="updateProductStock" parameterType="com.sp.app.admin.domain.ProductStockManage">
+		UPDATE productStock SET totalStock = #{totalStock}
+		WHERE stockNum = #{stockNum}
+	</update>
+
+	<select id="listProductStock" parameterType="map" resultType="com.sp.app.admin.domain.ProductStockManage">
+		SELECT p.productNum, p.productName, 
+			po1.optionNum, po1.optionName,
+			po2.optionNum optionNum2, po2.optionName optionName2,
+			d1.detailNum, d1.optionValue, 
+			d2.detailNum detailNum2, d2.optionValue optionValue2,
+		 	ps.stockNum, NVL(ps.totalStock, 0) totalStock
+		FROM product p 
+		LEFT OUTER JOIN productOption po1 ON p.productNum = po1.productNum AND parentOption IS NULL
+		LEFT OUTER JOIN productOption po2 ON po1.optionNum = po2.parentOption
+        LEFT OUTER JOIN optionDetail d1 ON po1.optionNum = d1.optionNum
+        LEFT OUTER JOIN optionDetail d2 ON po2.optionNum = d2.optionNum
+        <choose>
+        	<when test="optionCount == 0">
+        		LEFT OUTER JOIN productStock ps ON p.productNum = ps.productNum
+        	</when>
+        	<when test="optionCount == 1">
+        		LEFT OUTER JOIN productStock ps ON d1.detailNum = ps.detailNum
+        	</when>
+        	<otherwise>
+        		LEFT OUTER JOIN productStock ps ON d1.detailNum = ps.detailNum AND d2.detailNum = ps.detailNum2
+        	</otherwise>
+        </choose>
+		WHERE p.productNum = #{productNum}
+        ORDER BY detailNum, detailNum2
+	</select>
+</mapper>

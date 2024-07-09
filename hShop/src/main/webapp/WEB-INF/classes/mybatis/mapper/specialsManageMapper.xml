@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sp.app.admin.mapper.SpecialsManageMapper">
+	<insert id="insertSpecials" parameterType="com.sp.app.admin.domain.SpecialsManage">
+		INSERT INTO specials(specialNum, classify, subject, content, imageFilename, 
+		        startDate, endDate, showSpecial, reg_date) VALUES (
+				specials_seq.NEXTVAL, #{classify}, #{subject}, #{content}, #{imageFilename}, 
+				TO_DATE(#{startDate}, 'YYYY-MM-DD HH24:MI:SS'), 
+				TO_DATE(#{endDate}, 'YYYY-MM-DD HH24:MI:SS'), #{showSpecial}, SYSDATE)
+	</insert>
+	
+	<sql id="where-list">
+		<if test="schType=='all' ">
+			( INSTR(subject, #{kwd}) &gt; 0
+				OR DBMS_LOB.INSTR(content, #{kw}) &gt; 0 )
+		</if>
+		<if test="schType=='subject' ">
+			INSTR(subject, #{kwd}) &gt; 0
+		</if>
+		<if test="schType=='content' ">
+			DBMS_LOB.INSTR(content, #{kwd}) &gt; 0
+		</if>
+	</sql>
+		
+	<select id="dataCountSpecials" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0)
+		FROM specials
+		<where>
+			classify = #{classify}
+			<choose>
+				<when test="state == 1">
+					AND (startDate &lt;= SYSDATE AND endDate &gt;= SYSDATE)
+				</when>
+				<when test="state == 2">
+					AND startDate &gt; SYSDATE
+				</when>
+				<when test="state == 3">
+					AND endDate &lt; SYSDATE
+				</when>
+			</choose>
+			<if test="kwd != null and kwd != '' ">
+				AND <include refid="where-list"/>
+			</if>
+		</where>
+	</select>
+	
+	<select id="listSpecials" parameterType="map" resultType="com.sp.app.admin.domain.SpecialsManage">
+		SELECT s.specialNum, classify, subject, imageFilename, 
+		        TO_CHAR(startDate, 'YYYY-MM-DD HH24:MI') startDate, 
+		        TO_CHAR(endDate, 'YYYY-MM-DD HH24:MI') endDate, showSpecial, 
+		        TO_CHAR(reg_date, 'YYYY-MM-DD') reg_date, NVL(productCount, 0) productCount
+		FROM specials s
+		LEFT OUTER JOIN (
+			SELECT specialNum, NVL(COUNT(specialNum), 0) productCount
+			FROM specialsDetail
+			GROUP BY specialNum
+		) t ON s.specialNum = t.specialNum
+		<where>
+			classify = #{classify}
+			<choose>
+				<when test="state == 1">
+					AND (startDate &lt;= SYSDATE AND endDate &gt;= SYSDATE)
+				</when>
+				<when test="state == 2">
+					AND startDate &gt; SYSDATE
+				</when>
+				<when test="state == 3">
+					AND endDate &lt; SYSDATE
+				</when>
+			</choose>
+			<if test="kwd != null and kwd != '' ">
+				AND <include refid="where-list"/>
+			</if>
+		</where>
+		ORDER BY s.specialNum DESC
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+	
+	<select id="findById" parameterType="Long" resultType="com.sp.app.admin.domain.SpecialsManage">
+		SELECT specialNum, classify, subject, content, imageFilename, 
+		        TO_CHAR(startDate, 'YYYY-MM-DD HH24:MI') startDate, 
+		        TO_CHAR(endDate, 'YYYY-MM-DD HH24:MI') endDate,
+		        showSpecial, reg_date
+		FROM specials
+		WHERE specialNum = #{specialNum}
+	</select>
+
+	<update id="updateSpecials" parameterType="com.sp.app.admin.domain.SpecialsManage">
+		UPDATE specials SET subject = #{subject}, content = #{content}, 
+			imageFilename = #{imageFilename}, 
+			startDate = TO_DATE(#{startDate}, 'YYYY-MM-DD HH24:MI:SS'),
+			endDate = TO_DATE(#{endDate}, 'YYYY-MM-DD HH24:MI:SS'),
+			showSpecial = #{showSpecial}
+		WHERE specialNum = #{specialNum}
+	</update>
+	
+	<delete id="deleteSpecials" parameterType="Long">
+		DELETE FROM specials WHERE specialNum = #{specialNum}
+	</delete>
+
+	<!-- 오늘의 특가/기획전의 상품 등록, 수정, 리스트 -->
+	<insert id="insertSpecialsDetail" parameterType="com.sp.app.admin.domain.SpecialsDetailManage">
+		INSERT INTO specialsDetail(detailNum, specialNum, productNum, displayOrder, 
+		        showDetail) VALUES (specialsDetail_seq.NEXTVAL, 
+		        #{specialNum}, #{productNum}, #{displayOrder}, #{showDetail})
+	</insert>
+
+	<select id="dataCountDetail" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0)
+		FROM specialsDetail
+		WHERE specialNum = #{specialNum}
+	</select>
+	
+	<select id="listSpecialsDetail" parameterType="map" resultType="com.sp.app.admin.domain.SpecialsDetailManage">
+		SELECT d.detailNum, d.specialNum, d.productNum, d.displayOrder, d.showDetail, 
+		    p.productName, p.productShow
+		FROM specialsDetail d 
+		JOIN product p ON d.productNum = p.productNum
+		WHERE specialNum = #{specialNum}
+		ORDER BY p.productNum DESC
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+
+	<update id="updateSpecialsDetail" parameterType="com.sp.app.admin.domain.SpecialsDetailManage">
+		UPDATE specialsDetail SET productNum = #{productNum}, displayOrder = #{displayOrder}, 
+			showDetail = #{showDetail}
+		WHERE detailNum = #{detailNum}
+	</update>
+	
+	<delete id="deleteSpecialsDetail" parameterType="Long">
+		DELETE FROM specialsDetail WHERE detailNum = #{detailNum}
+	</delete>
+	
+	<select id="specialsProductSearch" parameterType="map" resultType="com.sp.app.admin.domain.SpecialsDetailManage">
+		SELECT productNum, productName, productShow, classify
+		FROM product
+		WHERE classify = #{classify} AND productShow = 1 AND 
+			<if test="kwd != null and kwd != '' ">
+				<choose>
+					<when test="schType == 'productNum'">
+					    productNum = #{kwd} AND
+					</when>
+					<otherwise>
+						INSTR(productName, #{kwd}) &gt; 0 AND 		
+					</otherwise>
+				</choose>
+			</if>
+		    productNum NOT IN (
+		        SELECT productNum FROM specialsDetail
+		        WHERE specialNum = #{specialNum}
+		    )
+	</select>
+
+</mapper>

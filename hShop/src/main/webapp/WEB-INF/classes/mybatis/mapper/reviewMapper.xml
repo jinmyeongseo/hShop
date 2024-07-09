@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sp.app.mapper.ReviewMapper">
+	<insert id="insertReview" parameterType="com.sp.app.domain.Review">
+		INSERT INTO productReview(num, score, review, productNum, memberIdx, review_date, showReview, locked)
+			VALUES(#{num}, #{score}, #{review}, #{productNum}, #{memberIdx}, SYSDATE, 1, 0)
+	</insert>
+	
+	<insert id="insertReviewFile" parameterType="com.sp.app.domain.Review">
+		INSERT INTO productReviewFile(fileNum, num, filename)
+			VALUES(productReviewFile_seq.NEXTVAL, #{num}, #{filename})
+	</insert>
+	
+	<select id="findByReviewSummary" parameterType="map" resultType="com.sp.app.domain.Summary">
+		SELECT NVL(COUNT(*), 0) count,
+			   ROUND(NVL(AVG(score), 0), 1) ave,
+			   COUNT(DECODE(score, 1, 1)) score1, 
+			   COUNT(DECODE(score, 2, 1)) score2, 
+			   COUNT(DECODE(score, 3, 1)) score3, 
+			   COUNT(DECODE(score, 4, 1)) score4, 
+			   COUNT(DECODE(score, 5, 1)) score5 
+		FROM productReview
+		WHERE productNum = #{productNum} AND showReview = 1 AND locked = 0
+	</select>
+
+	<select id="listReview" parameterType="map" resultType="com.sp.app.domain.Review">
+		SELECT pr.num, pr.memberIdx, userName, score, review, answer, productNum, filename, 
+			TO_CHAR(review_date, 'YYYY-MM-DD') review_date, 
+			TO_CHAR(answer_date, 'YYYY-MM-DD') answer_date
+		FROM productReview pr
+		JOIN member1 m ON pr.memberIdx = m.memberIdx 
+		LEFT OUTER JOIN (
+			SELECT num, LISTAGG(filename, ',') WITHIN GROUP(ORDER BY fileNum) filename
+            FROM productReviewFile
+            GROUP BY num	
+		) f ON pr.num = f.num
+		WHERE pr.productNum = #{productNum} AND showReview = 1 AND locked = 0
+		<choose>
+			<when test="sortNo==2">
+				ORDER BY score DESC, review_date DESC
+			</when>
+			<when test="sortNo==3">
+				ORDER BY score ASC, review_date DESC
+			</when>
+			<otherwise>
+				ORDER BY review_date DESC
+			</otherwise>
+		</choose>
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+	
+	<select id="dataCount2" parameterType="map" resultType="Integer">
+		SELECT NVL(COUNT(*), 0)
+		FROM productReview
+		<where>
+			<if test="memberIdx != null">
+				memberIdx = #{memberIdx}
+			</if>
+			<if test="mode != null">
+				<if test="mode == 2">
+					AND ( answer IS NOT NULL )
+				</if>
+				<if test="mode == 3">
+					AND ( answer IS NULL )
+				</if>
+			</if>
+		</where>
+	</select>
+	
+	<select id="listReview2" parameterType="map" resultType="com.sp.app.domain.Review">
+		SELECT pr.num, pr.memberIdx, userName, score, review, answer, pr.productNum, filename, 
+			showReview, locked, pr.review_date, pr.answer_date, 
+			productName, op.optionValue, op2.optionValue optionValue2
+		FROM productReview pr
+		JOIN member1 m ON pr.memberIdx = m.memberIdx 
+		JOIN orderDetail od ON pr.num = od.orderDetailNum
+		JOIN product p ON p.productNum = od.productNum
+		LEFT OUTER JOIN optionDetail op ON od.detailNum = op.detailNum
+		LEFT OUTER JOIN optionDetail op2 ON od.detailNum2 = op2.detailNum		
+		LEFT OUTER JOIN (
+			SELECT num, LISTAGG(filename, ',') WITHIN GROUP(ORDER BY fileNum) filename
+            FROM productReviewFile
+            GROUP BY num	
+		) f ON pr.num=f.num
+		<where>
+			<if test="memberIdx != null">
+				pr.memberIdx = #{memberIdx}
+			</if>
+			<if test="mode != null">
+				<if test="mode == 2">
+					AND ( answer IS NOT NULL )
+				</if>
+				<if test="mode == 3">
+					AND ( answer IS NULL )
+				</if>
+			</if>
+		</where>
+		ORDER BY review_date DESC
+		OFFSET #{offset} ROWS FETCH FIRST #{size} ROWS ONLY
+	</select>
+	
+	<update id="updateReview" parameterType="com.sp.app.domain.Review">
+		UPDATE productReview SET answer = #{answer}, answer_date = SYSDATE, 
+			showReview = #{showReview}, locked = #{locked}
+		WHERE num = #{num}
+	</update>
+	
+	<select id="listReviewFile" parameterType="long" resultType="com.sp.app.domain.Review">
+		SELECT fileNum, num, filename
+		FROM productReviewFile
+		WHERE num = #{num}
+	</select>
+	
+	<delete id="deleteReview" parameterType="long">
+		DELETE FROM productReview
+		WHERE num = #{num}
+	</delete>
+</mapper>
