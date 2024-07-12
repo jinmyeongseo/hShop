@@ -5,7 +5,172 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
 
 <script type="text/javascript">
+$(function(){
+	let url = "${pageContext.request.contextPath}/admin/charts";
+	
+	// AJAX-JSON
+	$.getJSON(url, function(data) {
+		// console.log(data);
+		chartsDay(data);
+		chartsDayOfWeek(data);
+		chartsMonth(data);
+	});
+	
+	function chartsDay(data) {
+		// pie
+		let chartData=[];
+		for(let item of data.days) {
+			let s = parseInt(item.ORDERDATE.substring(5, 7)) + '월 '
+				+ parseInt(item.ORDERDATE.substring(8)) + '일';
+			
+			let obj = {value:item.TOTALMONEY, name:s};
+			chartData.push(obj);
+		}
+		var chartDom = document.querySelector('.charts-day');
+		var myChart = echarts.init(chartDom);
+		var option;
 
+		option = {
+		  tooltip: {
+		    trigger: 'item'
+		  },
+		  legend: {
+		    top: '5%',
+		    left: 'center'
+		  },
+		  series: [
+		    {
+		      name: '일별 판매현황',
+		      type: 'pie',
+		      radius: ['40%', '70%'],
+		      avoidLabelOverlap: false,
+		      itemStyle: {
+		        borderRadius: 10,
+		        borderColor: '#fff',
+		        borderWidth: 2
+		      },
+		      label: {
+		        show: false,
+		        position: 'center'
+		      },
+		      emphasis: {
+		        label: {
+		          show: true,
+		          fontSize: 40,
+		          fontWeight: 'bold'
+		        }
+		      },
+		      labelLine: {
+		        show: false
+		      },
+		      data: chartData
+		    }
+		  ]
+		};
+
+		option && myChart.setOption(option);
+	}
+	
+
+	function chartsDayOfWeek(data) {
+		// bar
+		let chartData = [];
+		
+		let m = new Date().getMonth() + 1;
+		let m2 = parseInt(data.dayOfWeek.month.substring(4));
+		
+		let title = (m!==m2) ? '전월 요일별 판매현황' : '이번달 요일별 판매현황';
+		document.querySelector('.charts-dayOfWeek-title').innerHTML = title;
+		
+		chartData.push(data.dayOfWeek.SUN);
+		chartData.push(data.dayOfWeek.MON);
+		chartData.push(data.dayOfWeek.TUE);
+		chartData.push(data.dayOfWeek.WED);
+		chartData.push(data.dayOfWeek.THU);
+		chartData.push(data.dayOfWeek.FRI);
+		chartData.push(data.dayOfWeek.SAT);
+		
+		var chartDom = document.querySelector('.charts-dayOfWeek');
+		var myChart = echarts.init(chartDom);
+		var option;
+
+		option = {
+		  tooltip: {
+			  trigger: 'item'
+		  },
+		  xAxis: {
+		    type: 'category',
+		    data: ['일', '월', '화', '수', '목', '금', '토']
+		  },
+		  yAxis: {
+		    type: 'value'
+		  },
+		  series: [
+		    {
+		      data: chartData,
+		      type: 'bar'
+		    }
+		  ]
+		};
+
+		option && myChart.setOption(option);
+
+	}
+	
+	function chartsMonth(data) {
+		// pie	
+		let chartData=[];
+		for(let item of data.months) {
+			let s = parseInt(item.ORDERDATE.substring(4)) + '월 ';
+			
+			let obj = {value:item.TOTALMONEY, name:s};
+			chartData.push(obj);
+		}
+		var chartDom = document.querySelector('.charts-month');
+		var myChart = echarts.init(chartDom);
+		var option;
+
+		option = {
+		  tooltip: {
+		    trigger: 'item'
+		  },
+		  legend: {
+		    top: '5%',
+		    left: 'center'
+		  },
+		  series: [
+		    {
+		      name: '월별 판매현황',
+		      type: 'pie',
+		      radius: ['40%', '70%'],
+		      avoidLabelOverlap: false,
+		      itemStyle: {
+		        borderRadius: 10,
+		        borderColor: '#fff',
+		        borderWidth: 2
+		      },
+		      label: {
+		        show: false,
+		        position: 'center'
+		      },
+		      emphasis: {
+		        label: {
+		          show: true,
+		          fontSize: 40,
+		          fontWeight: 'bold'
+		        }
+		      },
+		      labelLine: {
+		        show: false
+		      },
+		      data: chartData
+		    }
+		  ]
+		};
+
+		option && myChart.setOption(option);
+	}
+});
 </script>
 
 <div class="container body-container">

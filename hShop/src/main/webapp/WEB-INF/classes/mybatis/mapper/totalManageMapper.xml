@@ -2,6 +2,130 @@
 
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.sp.app.admin.mapper.TotalManageMapper">
+	
+	<select id="todayProduct" resultType="map">
+		select COUNT(*) count, NVL(SUM(totalMoney - cancelAmount), 0) total
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYY-MM-DD') = TO_CHAR(SYSDATE, 'YYYY-MM-DD')
+    		AND orderState != 6
+	</select>
+	
+	<select id="thisMonthProduct" resultType="map">
+		select COUNT(*) count, NVL(SUM(totalMoney - cancelAmount), 0) total
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYYMM') = TO_CHAR(SYSDATE, 'YYYYMM')
+    		AND orderState != 6
+	</select>
+	
+	<select id="previousMonthProduct" resultType="map">
+		select COUNT(*) count, NVL(SUM(totalMoney - cancelAmount), 0) total
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYYMM') = TO_CHAR(ADD_MONTHS(SYSDATE, -1), 'YYYYMM')
+    		AND orderState != 6
+	</select>
+	
+	<select id="dayTotalMoney" parameterType="String" resultType="map">
+		select TO_CHAR(TO_DATE(#{date}) -6, 'YYYY-MM-DD') orderDate, NVL(SUM(totalMoney - cancelAmount), 0) totalMoney
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYY-MM-DD') = TO_CHAR(TO_DATE(#{date}) -6, 'YYYY-MM-DD') AND orderState != 6
+		    UNION ALL
+		select TO_CHAR(TO_DATE(#{date}) -5, 'YYYY-MM-DD') orderDate, NVL(SUM(totalMoney - cancelAmount), 0) totalMoney
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYY-MM-DD') = TO_CHAR(TO_DATE(#{date}) -5, 'YYYY-MM-DD') AND orderState != 6
+		    UNION ALL
+		select TO_CHAR(TO_DATE(#{date}) -4, 'YYYY-MM-DD') orderDate, NVL(SUM(totalMoney - cancelAmount), 0) totalMoney
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYY-MM-DD') = TO_CHAR(TO_DATE(#{date}) -4, 'YYYY-MM-DD') AND orderState != 6
+		    UNION ALL
+		select TO_CHAR(TO_DATE(#{date}) -3, 'YYYY-MM-DD') orderDate, NVL(SUM(totalMoney - cancelAmount), 0) totalMoney
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYY-MM-DD') = TO_CHAR(TO_DATE(#{date}) -3, 'YYYY-MM-DD') AND orderState != 6
+		    UNION ALL
+		select TO_CHAR(TO_DATE(#{date}) -2, 'YYYY-MM-DD') orderDate, NVL(SUM(totalMoney - cancelAmount), 0) totalMoney
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYY-MM-DD') = TO_CHAR(TO_DATE(#{date}) -2, 'YYYY-MM-DD') AND orderState != 6
+		    UNION ALL
+		select TO_CHAR(TO_DATE(#{date}) -1, 'YYYY-MM-DD') orderDate, NVL(SUM(totalMoney - cancelAmount), 0) totalMoney
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYY-MM-DD') = TO_CHAR(TO_DATE(#{date}) -1, 'YYYY-MM-DD') AND orderState != 6
+		     UNION ALL
+		select #{date} orderDate, NVL(SUM(totalMoney - cancelAmount), 0) totalMoney
+		FROM productOrder
+		WHERE TO_CHAR(orderDate, 'YYYY-MM-DD') = #{date}AND orderState != 6
+	</select>
+	
+	
+	<select id="dayTotalMoney2"  parameterType="String" resultType="map">
+		SELECT TO_CHAR(orderDate, 'YYYY-MM-DD') orderDate, NVL(SUM(totalMoney - cancelAmount), 0) totalMoney 
+		FROM productOrder 
+		WHERE orderState != 6 AND  
+			( TO_CHAR(orderDate, 'YYYY-MM-DD') &gt;= TO_CHAR(TO_DATE(#{date}, 'YYYY-MM-DD')-6, 'YYYY-MM-DD') AND 
+			  TO_CHAR(orderDate, 'YYYY-MM-DD') &lt;= TO_CHAR(TO_DATE(#{date}, 'YYYY-MM-DD'), 'YYYY-MM-DD') ) 
+		GROUP BY TO_CHAR(orderDate, 'YYYY-MM-DD')
+		ORDER BY orderDate
+	</select>
 
+	<!-- 6개월간 월별 판매 금액 -->
+	<select id="monthTotalMoney"  parameterType="String" resultType="map">
+		SELECT TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -5), 'YYYYMM') orderDate, 
+				NVL(SUM(totalMoney - cancelAmount), 0) totalMoney 
+		FROM productOrder 
+		WHERE orderState != 6 AND TO_CHAR(orderDate, 'YYYYMM') = TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -5), 'YYYYMM') 
+		  UNION ALL
+		  
+		SELECT TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -4), 'YYYYMM') orderDate, 
+				NVL(SUM(totalMoney - cancelAmount), 0) totalMoney 
+		FROM productOrder 
+		WHERE orderState != 6 AND TO_CHAR(orderDate, 'YYYYMM') = TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -4), 'YYYYMM') 
+		  UNION ALL
+		  
+		SELECT TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -3), 'YYYYMM') orderDate, 
+				NVL(SUM(totalMoney - cancelAmount), 0) totalMoney 
+		FROM productOrder 
+		WHERE orderState != 6 AND TO_CHAR(orderDate, 'YYYYMM') = TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -3), 'YYYYMM') 
+		  UNION ALL
+		  
+		SELECT TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -2), 'YYYYMM') orderDate, 
+				NVL(SUM(totalMoney - cancelAmount), 0) totalMoney 
+		FROM productOrder 
+		WHERE orderState != 6 AND TO_CHAR(orderDate, 'YYYYMM') = TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -2), 'YYYYMM') 
+		  UNION ALL
+		  
+		SELECT TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -1), 'YYYYMM') orderDate, 
+				NVL(SUM(totalMoney - cancelAmount), 0) totalMoney 
+		FROM productOrder 
+		WHERE orderState != 6 AND TO_CHAR(orderDate, 'YYYYMM') = TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -1), 'YYYYMM') 
+		  UNION ALL
+		  
+		SELECT #{month} orderDate, 
+				NVL(SUM(totalMoney - cancelAmount), 0) totalMoney 
+		FROM productOrder 
+		WHERE orderState != 6 AND TO_CHAR(orderDate, 'YYYYMM') = #{month}
+	</select>
+	
+	<select id="monthTotalMoney2"  parameterType="String" resultType="map">
+		SELECT TO_CHAR(orderDate, 'YYYYMM') orderDate, NVL(SUM(totalMoney - cancelAmount), 0) totalMoney 
+		FROM productOrder 
+		WHERE orderState != 6 AND
+			( TO_CHAR(orderDate, 'YYYYMM') &gt;= TO_CHAR(ADD_MONTHS(TO_DATE(#{month}, 'YYYYMM'), -5), 'YYYYMM') 
+				AND TO_CHAR(orderDate, 'YYYYMM') &lt;= #{month} ) 
+		GROUP BY TO_CHAR(orderDate, 'YYYYMM')
+		ORDER BY orderDate
+	</select>
+	
+	<!--  요일별 판매 건수 -->
+	<select id="dayOfWeekTotalCount" parameterType="String" resultType="map">
+            SELECT COUNT(*) total,
+                   NVL(COUNT(DECODE(TO_CHAR(orderDate, 'D'), 1, 1)), 0) "SUN",
+                   NVL(COUNT(DECODE(TO_CHAR(orderDate, 'D'), 2, 1)), 0) "MON",
+                   NVL(COUNT(DECODE(TO_CHAR(orderDate, 'D'), 3, 1)), 0) "TUE",
+                   NVL(COUNT(DECODE(TO_CHAR(orderDate, 'D'), 4, 1)), 0) "WED",
+                   NVL(COUNT(DECODE(TO_CHAR(orderDate, 'D'), 5, 1)), 0) "THU",
+                   NVL(COUNT(DECODE(TO_CHAR(orderDate, 'D'), 6, 1)), 0) "FRI",
+                   NVL(COUNT(DECODE(TO_CHAR(orderDate, 'D'), 7, 1)), 0) "SAT"
+            FROM productOrder
+            WHERE orderState != 6 AND TO_CHAR(orderDate, 'YYYYMM') = #{month}
+	</select>
+	
 	
 </mapper>
